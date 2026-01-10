@@ -573,7 +573,6 @@
 
                 this.isDistracted = false;
                 this.distractedTimer = 0;
-
                 this.sprintCooldown = 0;
                 this.sprintDuration = 0;
                 this.maxSprintDuration = 180; // 3 seconds at 60fps
@@ -598,7 +597,7 @@
                     // Keep tongue out and happy
                     this.tongueOut = 1;
                 } else if (this.isDistracted && raccoon && raccoon.active) {
-                    // Being pulled toward raccoon
+                    // Being pulled toward raccoon - but won't reach it!
                     this.distractedTimer++;
                     const dx = raccoon.x - this.x;
                     const dy = raccoon.y - this.y;
@@ -628,7 +627,7 @@
                     this.tongueOut = Math.min(this.tongueOut + 0.04, 1);
                     this.walkCycle += this.speed * 0.1;
                     
-                    if (this.distractedTimer > 300 || !raccoon.active) {
+                    if (this.distractedTimer > 200 || !raccoon.active) {
                         this.isDistracted = false;
                         this.distractedTimer = 0;
                     }
@@ -1138,7 +1137,7 @@
                 this.y = 0;
                 this.active = false;
                 this.lifetime = 0;
-                this.maxLifetime = 300; // 5 seconds at 60fps
+                this.maxLifetime = 200; // 3.3 seconds at 60fps - disappears before Teddy reaches it
 
                 this.container.addChild(this.graphics);
             }
@@ -1234,6 +1233,8 @@
 
                 // Show warning message
                 statusEl.textContent = "Oh no! Teddy sees a raccoon!";
+                statusEl.style.fontSize = "24px";
+                statusEl.style.fontWeight = "bold";
                 statusEl.classList.add('show');
             }
 
@@ -1746,9 +1747,11 @@
                 // Update Raccoon
                 if (raccoon) raccoon.update(dt);
 
-                // Show raccoon message more prominently
-                if (raccoon && raccoon.active && raccoon.lifetime < 50) {
+                // Keep showing raccoon message while raccoon is active
+                if (raccoon && raccoon.active) {
                     statusEl.textContent = "Oh no! Teddy sees a raccoon!";
+                    statusEl.style.fontSize = "24px";
+                    statusEl.style.fontWeight = "bold";
                     statusEl.classList.add('show');
                 }
 
@@ -1756,6 +1759,8 @@
                 if (raccoon && !raccoon.active && teddy.isDistracted) {
                     teddy.isDistracted = false;
                     teddy.distractedTimer = 0;
+                    statusEl.style.fontSize = "18px";
+                    statusEl.style.fontWeight = "normal";
                     statusEl.classList.remove('show');
                 }
 

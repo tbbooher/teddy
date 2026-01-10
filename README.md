@@ -111,7 +111,7 @@ http://localhost:3000
 - **Status messages** - Real-time feedback on game events
 - **Leaderboard highlighting** - Your score highlighted in rankings
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 teddy/
@@ -123,7 +123,7 @@ teddy/
 └── deploy.zsh             # Deployment script
 ```
 
-## 🎭 Character Details
+## Character Details
 
 ### Teddy (Golden Doodle)
 - Fluffy golden coat with curly fur details
@@ -149,7 +149,7 @@ teddy/
 - Whiskers and detailed facial features
 - Appears as both menu mascot and gameplay distraction
 
-## 🏆 Leaderboard System
+## Leaderboard System
 
 Scores are ranked by:
 1. Total points (descending)
@@ -157,22 +157,22 @@ Scores are ranked by:
 
 Top 10 scores persist in browser localStorage.
 
-## 🐛 Known Features
+## Known Features
 
 - Sprint timing is crucial - use wisely!
 - Raccoon distraction only happens once per game
 - Sugar can't be caught while hiding or mid-jump
 - Furniture generation ensures no overlapping obstacles
 
-## 📄 License
+## License
 
-Created with ❤️ as a fun browser game project.
+Created with love as a fun browser game project.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - PixiJS community for excellent documentation
 - Inspired by classic chase games and pet behavior
 
 ---
 
-**Have fun playing! Can you reach the top of the leaderboard?** 🏆
+**Have fun playing! Can you reach the top of the leaderboard?**
