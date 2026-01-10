@@ -1059,14 +1059,16 @@
                 this.x += this.vx;
                 this.walkCycle += 0.15;
 
-                // Remove when off screen
+                // Remove when off screen and don't reactivate
                 if (this.x > W + 100) {
                     this.active = false;
+                    this.container.alpha = 0;
                 }
 
                 this.container.x = this.x;
                 this.container.y = this.y;
                 this.container.scale.x = this.facing;
+                this.container.alpha = this.active ? 1 : 0;
 
                 this.draw();
             }
@@ -1627,7 +1629,10 @@
 
             // Start T-Rex Rabbit in level 3+
             if (gameState.level >= 3) {
-                tRexRabbit.start();
+                // Only start if not already active (so it only walks across once)
+                if (!tRexRabbit.active) {
+                    tRexRabbit.start();
+                }
             } else {
                 tRexRabbit.active = false;
             }
@@ -1740,6 +1745,12 @@
 
                 // Update Raccoon
                 if (raccoon) raccoon.update(dt);
+
+                // Show raccoon message more prominently
+                if (raccoon && raccoon.active && raccoon.lifetime < 50) {
+                    statusEl.textContent = "Oh no! Teddy sees a raccoon!";
+                    statusEl.classList.add('show');
+                }
 
                 // Clear raccoon message when raccoon disappears
                 if (raccoon && !raccoon.active && teddy.isDistracted) {

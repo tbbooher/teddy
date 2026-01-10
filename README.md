@@ -1,12 +1,12 @@
-# 🐕 Teddy & Sugar - A Playful Chase Game
+# Teddy & Sugar - A Playful Chase Game
 
 A delightful browser-based game where you help Teddy the Golden Doodle catch his mischievous Siamese cat friend, Sugar!
 
-## 🎮 Game Overview
+## Game Overview
 
 Guide Teddy around the room to catch Sugar before time runs out. Sugar will hide under furniture, jump away when spooked, and do everything she can to avoid being caught. The faster you catch her, the more points you earn!
 
-## 🛠 Technology Stack
+## Technology Stack
 
 ### Frontend
 - **PixiJS v8.6.6** - Hardware-accelerated 2D graphics rendering engine
