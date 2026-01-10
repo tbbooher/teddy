@@ -1,0 +1,1816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Play with Teddy and Sugar!</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/8.6.6/pixi.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            overflow: hidden;
+            background: #D4B896;
+            font-family: 'Georgia', serif;
+        }
+        canvas { display: block; }
+        .ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .title {
+            text-align: center;
+            padding-top: 15px;
+            font-size: 28px;
+            color: #5D4E37;
+            text-shadow: 2px 2px 4px rgba(255,255,255,0.5);
+        }
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 30px;
+            font-size: 18px;
+            color: #5D4E37;
+        }
+        .timer, .score, .level, .player-name {
+            background: rgba(255,255,255,0.7);
+            padding: 8px 16px;
+            border-radius: 20px;
+        }
+        .timer.warning {
+            background: #FFD700;
+            animation: pulse 0.5s infinite;
+        }
+        .timer.danger {
+            background: #FF6B6B;
+            color: white;
+            animation: pulse 0.3s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        .narrative-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255,255,255,0.95);
+            padding: 30px 50px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 650px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            pointer-events: auto;
+        }
+        .narrative-box h2 {
+            color: #5D4E37;
+            margin-bottom: 15px;
+            font-size: 28px;
+        }
+        .narrative-box.game-over h2 {
+            color: #C0392B;
+        }
+        .narrative-box p {
+            color: #6B5B4F;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+        .narrative-box input {
+            width: 200px;
+            padding: 10px 15px;
+            font-size: 18px;
+            border: 2px solid #7DA08B;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-family: 'Georgia', serif;
+            text-align: center;
+        }
+        .narrative-box button {
+            background: #7DA08B;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 18px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-family: 'Georgia', serif;
+            transition: background 0.2s;
+        }
+        .narrative-box button:hover {
+            background: #6B8E7B;
+        }
+        .leaderboard {
+            margin-top: 20px;
+            text-align: left;
+            background: #F5F0E8;
+            padding: 15px;
+            border-radius: 10px;
+        }
+        .leaderboard h3 {
+            color: #5D4E37;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .leaderboard-entry {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 10px;
+            color: #6B5B4F;
+        }
+        .leaderboard-entry.highlight {
+            background: #7DA08B;
+            color: white;
+            border-radius: 5px;
+        }
+        .status {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 18px;
+            color: #5D4E37;
+            background: rgba(255,255,255,0.8);
+            padding: 8px 16px;
+            border-radius: 20px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .status.show { opacity: 1; }
+        .controls-hint {
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            color: #5D4E37;
+            background: rgba(255,255,255,0.6);
+            padding: 5px 12px;
+            border-radius: 10px;
+        }
+        .sprint-indicator {
+            position: absolute;
+            bottom: 20px;
+            right: 30px;
+            font-size: 16px;
+            color: #5D4E37;
+            background: rgba(255,255,255,0.8);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+        .sprint-indicator.ready {
+            background: rgba(125, 160, 139, 0.8);
+            color: white;
+        }
+        .sprint-indicator.active {
+            background: rgba(255, 215, 0, 0.9);
+            color: #5D4E37;
+            animation: pulse 0.5s infinite;
+        }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="ui-overlay">
+        <div class="title">Play with Teddy and Sugar!</div>
+        <div class="game-info hidden" id="gameInfo">
+            <div class="player-name">Player: <span id="playerNameDisplay">---</span></div>
+            <div class="level">Level: <span id="levelNum">1</span></div>
+            <div class="timer" id="timerBox">Time: <span id="timerDisplay">30.0</span>s</div>
+            <div class="score">Score: <span id="totalScore">0</span></div>
+        </div>
+    </div>
+    <div class="narrative-box" id="narrative">
+        <h2 id="narrativeTitle">Welcome!</h2>
+        <p id="narrativeText">Enter your name to play!</p>
+        <input type="text" id="playerNameInput" placeholder="Your name" maxlength="12">
+        <br>
+        <button id="narrativeBtn" onclick="advanceNarrative()">Start Game</button>
+        <div class="leaderboard hidden" id="leaderboard">
+            <h3>High Scores</h3>
+            <div id="leaderboardEntries"></div>
+        </div>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="controls-hint hidden" id="controlsHint">Use Arrow Keys to move Teddy! Hold Shift to Sprint!</div>
+    <div class="sprint-indicator hidden" id="sprintIndicator">Sprint Ready</div>
+
+    <script>
+        // ========== DOM ELEMENTS ==========
+        const statusEl = document.getElementById('status');
+        const narrativeEl = document.getElementById('narrative');
+        const narrativeTitle = document.getElementById('narrativeTitle');
+        const narrativeText = document.getElementById('narrativeText');
+        const narrativeBtn = document.getElementById('narrativeBtn');
+        const playerNameInput = document.getElementById('playerNameInput');
+        const playerNameDisplay = document.getElementById('playerNameDisplay');
+        const gameInfoEl = document.getElementById('gameInfo');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const timerBox = document.getElementById('timerBox');
+        const levelNumEl = document.getElementById('levelNum');
+        const totalScoreEl = document.getElementById('totalScore');
+        const leaderboardEl = document.getElementById('leaderboard');
+        const leaderboardEntries = document.getElementById('leaderboardEntries');
+        const controlsHint = document.getElementById('controlsHint');
+        const sprintIndicator = document.getElementById('sprintIndicator');
+
+        // ========== GAME STATE ==========
+        const gameState = {
+            phase: 'name-entry', // name-entry, intro, countdown, playing, catching, caught, level-up, game-over
+            level: 1,
+            timeRemaining: 30,
+            maxTime: 30,
+            totalScore: 0,
+            roundScore: 0,
+            roundStartTime: 0,
+            maxPointsPerLevel: 1000,
+            playerName: '',
+            catchAnimTime: 0
+        };
+
+        // ========== LEADERBOARD (Total Score) ==========
+        function getLeaderboard() {
+            try {
+                return JSON.parse(localStorage.getItem('teddySugarLeaderboardPoints')) || [];
+            } catch { return []; }
+        }
+
+        function saveToLeaderboard(name, totalPoints, levelsReached) {
+            const board = getLeaderboard();
+            board.push({ name, totalPoints, levels: levelsReached, date: Date.now() });
+            board.sort((a, b) => {
+                // Sort by total points (desc), then by levels reached (desc)
+                if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+                return b.levels - a.levels;
+            });
+            localStorage.setItem('teddySugarLeaderboardPoints', JSON.stringify(board.slice(0, 10)));
+        }
+
+        function displayLeaderboard(highlightTotal = null) {
+            const board = getLeaderboard();
+            if (board.length === 0) {
+                leaderboardEl.classList.add('hidden');
+                return;
+            }
+            leaderboardEl.classList.remove('hidden');
+            leaderboardEntries.innerHTML = board.slice(0, 5).map((entry, i) => {
+                const isHighlight = highlightTotal && Math.abs(entry.totalPoints - highlightTotal) < 1;
+                return `<div class="leaderboard-entry ${isHighlight ? 'highlight' : ''}">
+                    <span>${i + 1}. ${entry.name}</span>
+                    <span>Lvl ${entry.levels} - ${entry.totalPoints} pts</span>
+                </div>`;
+            }).join('');
+        }
+
+        // ========== KEYBOARD INPUT ==========
+        const keys = { up: false, down: false, left: false, right: false, shift: false };
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') keys.up = true;
+            if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') keys.down = true;
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
+            if (e.key === 'Shift') keys.shift = true;
+        });
+
+        document.addEventListener('keyup', e => {
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') keys.up = false;
+            if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') keys.down = false;
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
+            if (e.key === 'Shift') keys.shift = false;
+        });
+
+        // ========== PIXI SETUP ==========
+        let app, W, H;
+        let floorContainer, furnitureContainer, animalContainer, effectsContainer;
+        let teddy, sugar;
+        let furniture = [];
+        let hearts = [];
+        let tRexRabbit = null;
+        let raccoon = null;
+        let raccoonHasAppeared = false;
+        let startRaccoon = null;
+
+        async function initPixi() {
+            app = new PIXI.Application();
+            await app.init({
+                width: window.innerWidth,
+                height: window.innerHeight,
+                background: 0xD4B896,
+                antialias: true
+            });
+            document.body.appendChild(app.canvas);
+
+            W = app.screen.width;
+            H = app.screen.height;
+
+            // Create layer containers
+            floorContainer = new PIXI.Container();
+            furnitureContainer = new PIXI.Container();
+            animalContainer = new PIXI.Container();
+            effectsContainer = new PIXI.Container();
+
+            app.stage.addChild(floorContainer);
+            app.stage.addChild(furnitureContainer);
+            app.stage.addChild(animalContainer);
+            app.stage.addChild(effectsContainer);
+
+            // Draw floor
+            drawFloor();
+
+            // Create animals
+            teddy = new GoldenDoodle();
+            sugar = new SiameseCat();
+            tRexRabbit = new TRexRabbit();
+            raccoon = new Raccoon();
+            startRaccoon = new StartRaccoon();
+            animalContainer.addChild(teddy.container);
+            animalContainer.addChild(sugar.container);
+            animalContainer.addChild(tRexRabbit.container);
+            effectsContainer.addChild(raccoon.container);
+            effectsContainer.addChild(startRaccoon.container);
+
+            // Handle resize
+            window.addEventListener('resize', () => {
+                W = window.innerWidth;
+                H = window.innerHeight;
+                app.renderer.resize(W, H);
+                drawFloor();
+            });
+
+            // Start game loop
+            app.ticker.add(gameLoop);
+
+            // Show name entry
+            showNarrative('name-entry');
+        }
+
+        function drawFloor() {
+            floorContainer.removeChildren();
+
+            const floor = new PIXI.Graphics();
+            // Base floor color
+            floor.rect(0, 0, W, H).fill(0xD4B896);
+
+            // Wood plank lines
+            for (let y = 0; y < H; y += 40) {
+                for (let x = (Math.floor(y / 40) % 2) * 60; x < W; x += 120) {
+                    floor.rect(x, y, 120, 40).stroke({ color: 0xC4A886, width: 1 });
+                }
+            }
+
+            // Baseboard
+            floor.rect(0, H - 15, W, 15).fill(0xF5F5F0);
+
+            floorContainer.addChild(floor);
+        }
+
+        // ========== FURNITURE ==========
+        function generateFurniture(level) {
+            furnitureContainer.removeChildren();
+            furniture = [];
+
+            const basePieces = 8;
+            const extraPerLevel = 2;
+            const maxPieces = 22;
+            const totalPieces = Math.min(maxPieces, basePieces + (level - 1) * extraPerLevel);
+
+            const types = ['couch', 'table', 'armchair', 'ottoman', 'plant', 'sidetable'];
+            const templates = {
+                couch: { width: 200, height: 75, canHide: false },
+                table: { width: 140, height: 55, canHide: true },
+                armchair: { width: 100, height: 70, canHide: true },
+                ottoman: { width: 60, height: 40, canHide: true },
+                plant: { width: 45, height: 70, canHide: false },
+                sidetable: { width: 50, height: 50, canHide: true }
+            };
+
+            const margin = 80;
+            const minY = 120;
+            const maxY = H - 100;
+
+            for (let i = 0; i < totalPieces; i++) {
+                const type = types[i % types.length];
+                const template = templates[type];
+                let placed = false;
+                let attempts = 0;
+
+                while (!placed && attempts < 50) {
+                    const x = margin + Math.random() * (W - 2 * margin - template.width);
+                    const y = minY + Math.random() * (maxY - minY - template.height);
+
+                    let overlaps = false;
+                    for (const f of furniture) {
+                        const pad = 60;
+                        if (x < f.x + f.width + pad && x + template.width + pad > f.x &&
+                            y < f.y + f.height + pad && y + template.height + pad > f.y) {
+                            overlaps = true;
+                            break;
+                        }
+                    }
+
+                    if (!overlaps) {
+                        const furn = createFurniture(type, x, y, template);
+                        furniture.push(furn);
+                        furnitureContainer.addChild(furn.graphics);
+                        placed = true;
+                    }
+                    attempts++;
+                }
+            }
+
+            sortFurnitureByY();
+        }
+
+        function sortFurnitureByY() {
+            furniture.sort((a, b) => (a.y + a.height) - (b.y + b.height));
+            furnitureContainer.removeChildren();
+            for (const f of furniture) {
+                furnitureContainer.addChild(f.graphics);
+            }
+        }
+
+        function createFurniture(type, x, y, template) {
+            const g = new PIXI.Graphics();
+            const furn = { type, x, y, width: template.width, height: template.height, canHide: template.canHide, graphics: g };
+
+            g.x = x;
+            g.y = y;
+
+            switch(type) {
+                case 'couch': drawCouch(g, template.width, template.height); break;
+                case 'table': drawTable(g, template.width, template.height); break;
+                case 'armchair': drawArmchair(g, template.width, template.height); break;
+                case 'ottoman': drawOttoman(g, template.width, template.height); break;
+                case 'plant': drawPlant(g, template.width, template.height); break;
+                case 'sidetable': drawSidetable(g, template.width, template.height); break;
+            }
+
+            return furn;
+        }
+
+        function drawCouch(g, w, h) {
+            // Shadow
+            g.ellipse(w/2, h + 4, w/2 - 15, 10).fill({ color: 0x000000, alpha: 0.1 });
+            // Legs
+            g.rect(15, h - 5, 8, 10).fill(0x5D4E37);
+            g.rect(w - 23, h - 5, 8, 10).fill(0x5D4E37);
+            // Base
+            g.roundRect(0, 28, w, h - 30, 6).fill(0x6B8E7B);
+            // Seat
+            g.roundRect(8, 32, w - 16, 24, 5).fill(0x7DA08B);
+            // Cushions
+            const cushionW = (w - 30) / 3;
+            for (let i = 0; i < 3; i++) {
+                g.roundRect(12 + i * (cushionW + 3), 6, cushionW, 30, 8).fill(0x7DA08B);
+            }
+            // Arms
+            g.roundRect(-4, 16, 18, 44, 5).fill(0x6B8E7B);
+            g.roundRect(w - 14, 16, 18, 44, 5).fill(0x6B8E7B);
+        }
+
+        function drawTable(g, w, h) {
+            g.rect(12, 14, 6, h - 14).fill(0x8B7355);
+            g.rect(w - 18, 14, 6, h - 14).fill(0x8B7355);
+            g.roundRect(0, 0, w, 16, 4).fill(0xA08060);
+            g.roundRect(6, 4, w - 12, 5, 2).fill(0xB89570);
+        }
+
+        function drawArmchair(g, w, h) {
+            g.ellipse(w/2, h + 2, w/2 - 10, 7).fill({ color: 0x000000, alpha: 0.1 });
+            g.rect(12, h - 5, 6, 8).fill(0x5D4E37);
+            g.rect(w - 18, h - 5, 6, 8).fill(0x5D4E37);
+            g.roundRect(8, 28, w - 16, h - 32, 5).fill(0xC4956A);
+            g.roundRect(12, 32, w - 24, 18, 4).fill(0xD4A57A);
+            g.roundRect(14, 4, w - 28, 32, 8).fill(0xD4A57A);
+            g.roundRect(-2, 18, 16, 38, 5).fill(0xC4956A);
+            g.roundRect(w - 14, 18, 16, 38, 5).fill(0xC4956A);
+        }
+
+        function drawOttoman(g, w, h) {
+            g.ellipse(w/2, h + 2, w/2 - 4, 5).fill({ color: 0x000000, alpha: 0.1 });
+            g.rect(6, h - 4, 5, 7).fill(0x5D4E37);
+            g.rect(w - 11, h - 4, 5, 7).fill(0x5D4E37);
+            g.roundRect(0, 6, w, h - 10, 6).fill(0x8B6B5B);
+            g.roundRect(3, 0, w - 6, 12, 5).fill(0x9B7B6B);
+        }
+
+        function drawPlant(g, w, h) {
+            // Pot
+            g.poly([8, h, 4, h - 20, w - 4, h - 20, w - 8, h]).fill(0xC4785A);
+            g.roundRect(2, h - 24, w - 4, 6, 2).fill(0xB4685A);
+            // Leaves
+            const cx = w / 2;
+            const cy = h - 35;
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
+                const lx = cx + Math.cos(angle) * 18;
+                const ly = cy + Math.sin(angle) * 18;
+                g.ellipse(lx, ly, 7, 22).fill(i % 2 === 0 ? 0x5A8B5A : 0x4A7B4A);
+            }
+        }
+
+        function drawSidetable(g, w, h) {
+            g.rect(6, 10, 4, h - 10).fill(0x6B5344);
+            g.rect(w - 10, 10, 4, h - 10).fill(0x6B5344);
+            g.roundRect(0, 0, w, 12, 3).fill(0x7B6354);
+        }
+
+        function isUnderFurniture(x, y) {
+            for (const f of furniture) {
+                if (f.canHide) {
+                    const pad = 15;
+                    if (x > f.x + pad && x < f.x + f.width - pad &&
+                        y > f.y + f.height * 0.4 && y < f.y + f.height + 20) {
+                        return f;
+                    }
+                }
+            }
+            return null;
+        }
+
+        function collidesWithFurniture(x, y, radius) {
+            for (const f of furniture) {
+                const cx = f.x + 10;
+                const cy = f.y + f.height * 0.3;
+                const cw = f.width - 20;
+                const ch = f.height * 0.6;
+
+                const closestX = Math.max(cx, Math.min(x, cx + cw));
+                const closestY = Math.max(cy, Math.min(y, cy + ch));
+                const dx = x - closestX;
+                const dy = y - closestY;
+
+                if (dx * dx + dy * dy < radius * radius) {
+                    return { furniture: f, closestX, closestY };
+                }
+            }
+            return null;
+        }
+
+        // ========== GOLDEN DOODLE (TEDDY) ==========
+        class GoldenDoodle {
+            constructor() {
+                this.container = new PIXI.Container();
+                this.x = 150;
+                this.y = 300;
+                this.vx = 0;
+                this.vy = 0;
+                this.facing = 1;
+                this.speed = 0;
+                this.maxSpeed = 5.5;
+                this.walkCycle = 0;
+                this.tongueOut = 0;
+                this.tailWag = 0;
+                this.isCatching = false;
+                this.catchTime = 0;
+
+                this.isDistracted = false;
+                this.distractedTimer = 0;
+
+                this.sprintCooldown = 0;
+                this.sprintDuration = 0;
+                this.maxSprintDuration = 180; // 3 seconds at 60fps
+                this.sprintCooldownTime = 600; // 10 seconds at 60fps
+
+                this.buildGraphics();
+            }
+
+            buildGraphics() {
+                this.graphics = new PIXI.Graphics();
+                this.container.addChild(this.graphics);
+            }
+
+            update(dt) {
+                if (gameState.phase === 'catching') {
+                    // Cute catching animation
+                    this.isCatching = true;
+                    this.catchTime += 0.05;
+                    this.speed = 0;
+                    this.vx *= 0.8;
+                    this.vy *= 0.8;
+                    // Keep tongue out and happy
+                    this.tongueOut = 1;
+                } else if (this.isDistracted && raccoon && raccoon.active) {
+                    // Being pulled toward raccoon
+                    this.distractedTimer++;
+                    const dx = raccoon.x - this.x;
+                    const dy = raccoon.y - this.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist > 20) {
+                        const angle = Math.atan2(dy, dx);
+                        this.vx = Math.cos(angle) * 6;
+                        this.vy = Math.sin(angle) * 6;
+                        
+                        // Actually move Teddy
+                        this.x += this.vx;
+                        this.y += this.vy;
+                        
+                        this.x = Math.max(50, Math.min(W - 50, this.x));
+                        this.y = Math.max(100, Math.min(H - 50, this.y));
+                    } else {
+                        this.vx *= 0.9;
+                        this.vy *= 0.9;
+                    }
+                    
+                    if (Math.abs(this.vx) > 0.3) {
+                        this.facing = this.vx > 0 ? 1 : -1;
+                    }
+                    
+                    this.speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                    this.tongueOut = Math.min(this.tongueOut + 0.04, 1);
+                    this.walkCycle += this.speed * 0.1;
+                    
+                    if (this.distractedTimer > 300 || !raccoon.active) {
+                        this.isDistracted = false;
+                        this.distractedTimer = 0;
+                    }
+                } else {
+                    this.isCatching = false;
+                    this.catchTime = 0;
+
+                    // Update sprint cooldown
+                    if (this.sprintCooldown > 0) {
+                        this.sprintCooldown--;
+                    }
+
+                    // Check if sprinting
+                    const isSprinting = keys.shift && this.sprintCooldown === 0 && 
+                                       (keys.up || keys.down || keys.left || keys.right);
+                    
+                    if (isSprinting && this.sprintDuration < this.maxSprintDuration) {
+                        this.sprintDuration++;
+                        if (this.sprintDuration >= this.maxSprintDuration) {
+                            this.sprintCooldown = this.sprintCooldownTime;
+                        }
+                    } else if (!isSprinting && this.sprintDuration > 0) {
+                        // Sprint ended, start cooldown
+                        this.sprintCooldown = this.sprintCooldownTime;
+                        this.sprintDuration = 0;
+                    }
+
+                    const currentMaxSpeed = isSprinting ? this.maxSpeed * 1.8 : this.maxSpeed;
+
+                    // Arrow key movement
+                    let ax = 0, ay = 0;
+                    if (keys.left) ax -= 1;
+                    if (keys.right) ax += 1;
+                    if (keys.up) ay -= 1;
+                    if (keys.down) ay += 1;
+
+                    if (ax !== 0 && ay !== 0) {
+                        ax *= 0.707;
+                        ay *= 0.707;
+                    }
+
+                    const accel = 0.5;
+                    const friction = 0.88;
+
+                    this.vx += ax * accel;
+                    this.vy += ay * accel;
+                    this.vx *= friction;
+                    this.vy *= friction;
+
+                    this.speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                    if (this.speed > currentMaxSpeed) {
+                        this.vx = (this.vx / this.speed) * currentMaxSpeed;
+                        this.vy = (this.vy / this.speed) * currentMaxSpeed;
+                        this.speed = currentMaxSpeed;
+                    }
+
+                    if (Math.abs(this.vx) > 0.3) {
+                        this.facing = this.vx > 0 ? 1 : -1;
+                    }
+
+                    let newX = this.x + this.vx;
+                    let newY = this.y + this.vy;
+
+                    const collision = collidesWithFurniture(newX, newY, 25);
+                    if (collision) {
+                        const pushX = newX - collision.closestX;
+                        const pushY = newY - collision.closestY;
+                        const pushDist = Math.sqrt(pushX * pushX + pushY * pushY);
+                        if (pushDist > 0) {
+                            newX = collision.closestX + (pushX / pushDist) * 27;
+                            newY = collision.closestY + (pushY / pushDist) * 27;
+                        }
+                    }
+
+                    this.x = Math.max(50, Math.min(W - 50, newX));
+                    this.y = Math.max(100, Math.min(H - 50, newY));
+
+                    // Animation
+                    if (this.speed > 0.5) {
+                        this.walkCycle += this.speed * 0.1;
+                        this.tongueOut = Math.min(this.tongueOut + 0.04, 1);
+                    } else {
+                        this.tongueOut = Math.max(this.tongueOut - 0.03, 0);
+                    }
+                }
+
+                // Tail wag - faster when catching!
+                const wagSpeed = this.isCatching ? 0.04 : 0.012;
+                const wagAmount = this.isCatching ? 0.8 : (0.3 + this.speed * 0.1);
+                this.tailWag = Math.sin(Date.now() * wagSpeed) * wagAmount;
+
+                this.container.x = this.x;
+                this.container.y = this.y;
+                this.container.scale.x = this.facing;
+                this.container.scale.y = 1;
+
+                this.draw();
+            }
+
+            draw() {
+                const g = this.graphics;
+                g.clear();
+
+                const furColor = 0xA65D3F;
+                const furLight = 0xC4785A;
+                const furDark = 0x8B4A32;
+
+                const bob = this.isCatching ? 0 : Math.sin(this.walkCycle * 2) * 2 * Math.min(this.speed / 3, 1);
+
+                // Head nibble - just dips DOWN, no forward movement
+                const nibbleDip = this.isCatching ? Math.abs(Math.sin(this.catchTime * 6)) * 10 : 0;
+
+                // Tail - wags excitedly when catching
+                const tailAngle = -0.5 + this.tailWag;
+                for (let i = 0; i < 5; i++) {
+                    const tx = -28 + Math.sin(tailAngle) * i * 4;
+                    const ty = -8 + bob - i * 7 - Math.cos(tailAngle) * i * 2;
+                    g.circle(tx, ty, 6 - i * 0.5).fill(i % 2 === 0 ? furColor : furLight);
+                }
+
+                // Back legs
+                this.drawLeg(g, -18, 8, furDark, 0.5, bob);
+                this.drawLeg(g, -18, -3, furDark, 0, bob);
+
+                // Body - stable, no stretching
+                g.ellipse(0, bob, 32, 22).fill(furColor);
+
+                // Curly fur
+                for (let i = 0; i < 6; i++) {
+                    const a = (i / 6) * Math.PI * 2;
+                    g.circle(Math.cos(a) * 22, bob + Math.sin(a) * 15, 5).fill(i % 2 === 0 ? furLight : furColor);
+                }
+
+                // White chest
+                g.ellipse(20, bob + 2, 10, 13).fill(0xF5F0E8);
+
+                // Front legs
+                this.drawLeg(g, 18, 5, furColor, 0, bob);
+                this.drawLeg(g, 18, -5, furColor, 0.5, bob);
+
+                // Head - stays in same X position, just dips down for nibbles
+                const headX = 35;
+                const headY = -4 + bob + nibbleDip;
+
+                // Floppy ears - bounce when excited
+                const earBounce = this.isCatching ? Math.sin(this.catchTime * 10) * 3 : 0;
+                g.ellipse(headX - 12, headY - 6 + earBounce, 9, 17).fill(furColor);
+                g.ellipse(headX + 12, headY - 6 - earBounce, 9, 17).fill(furColor);
+
+                // Head shape
+                g.ellipse(headX, headY, 22, 20).fill(furColor);
+
+                // Muzzle
+                g.ellipse(headX, headY + 10, 12, 9).fill(furLight);
+
+                // Nose
+                g.ellipse(headX, headY + 6, 7, 5).fill(0x1A1A1A);
+
+                // Tongue - always out and happy when catching, wags side to side
+                const tongueWag = this.isCatching ? Math.sin(this.catchTime * 12) * 3 : 0;
+                if (this.tongueOut > 0) {
+                    g.ellipse(headX + tongueWag, headY + 14 + this.tongueOut * 8, 4 + this.tongueOut, 7 * this.tongueOut).fill(0xE87B8A);
+                }
+
+                // Eyes - happy closed crescents when catching, normal otherwise
+                if (this.isCatching) {
+                    // Happy closed eyes (curved lines)
+                    for (const ex of [-8, 8]) {
+                        g.moveTo(headX + ex - 4, headY - 2);
+                        g.quadraticCurveTo(headX + ex, headY - 6, headX + ex + 4, headY - 2);
+                        g.stroke({ color: 0x1A1008, width: 2, cap: 'round' });
+                    }
+                } else {
+                    // Normal eyes
+                    for (const ex of [-8, 8]) {
+                        g.ellipse(headX + ex, headY - 3, 4, 5).fill(0xF8F4F0);
+                        g.ellipse(headX + ex, headY - 3, 3, 4).fill(0x1A1008);
+                        g.circle(headX + ex - 1, headY - 5, 1.2).fill(0xFFFFFF);
+                    }
+                }
+            }
+
+            drawLeg(g, xOff, yOff, color, phase, bob) {
+                const lift = Math.sin(this.walkCycle + phase * Math.PI * 2) * 6 * Math.min(this.speed / 3, 1);
+                const swing = Math.sin(this.walkCycle + phase * Math.PI * 2) * 8 * Math.min(this.speed / 3, 1);
+
+                const lx = xOff + swing * 0.3;
+                const ly = yOff + bob;
+
+                g.ellipse(lx, ly + 12, 8, 14).fill(color);
+                g.ellipse(lx + swing * 0.2, ly + 28 - Math.max(0, lift), 6, 10).fill(color);
+                g.ellipse(lx + swing * 0.3, ly + 36 - Math.max(0, lift * 1.2), 7, 4).fill(color);
+            }
+        }
+
+        // ========== SIAMESE CAT (SUGAR) ==========
+        class SiameseCat {
+            constructor() {
+                this.container = new PIXI.Container();
+                this.x = W - 200;
+                this.y = 300;
+                this.vx = 0;
+                this.vy = 0;
+                this.facing = -1;
+                this.speed = 0;
+                this.maxSpeed = 4.5;
+                this.walkCycle = 0;
+                this.tailWag = 0;
+
+                this.isHiding = false;
+                this.hidingFurniture = null;
+                this.hideTimer = 0;
+
+                this.isSpooked = false;
+                this.spookedTimer = 0;
+                this.spookCooldown = 0;
+                this.archBack = 0;
+
+                // Jump animation
+                this.isJumping = false;
+                this.jumpProgress = 0;
+                this.jumpHeight = 0;
+                this.visualY = 0; // Visual offset for jump
+
+                this.buildGraphics();
+            }
+
+            buildGraphics() {
+                this.shadow = new PIXI.Graphics();
+                this.graphics = new PIXI.Graphics();
+                this.container.addChild(this.shadow);
+                this.container.addChild(this.graphics);
+            }
+
+            startJump() {
+                if (!this.isJumping) {
+                    this.isJumping = true;
+                    this.jumpProgress = 0;
+                    this.jumpHeight = 80 + Math.random() * 40;
+                }
+            }
+
+            update(targetX, targetY, dt) {
+                // Jump animation
+                if (this.isJumping) {
+                    this.jumpProgress += 0.04;
+                    if (this.jumpProgress >= 1) {
+                        this.isJumping = false;
+                        this.jumpProgress = 0;
+                        this.visualY = 0;
+                    } else {
+                        // Parabolic arc
+                        this.visualY = -Math.sin(this.jumpProgress * Math.PI) * this.jumpHeight;
+                    }
+                } else {
+                    this.visualY = 0;
+                }
+
+                const dx = targetX - this.x;
+                const dy = targetY - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist > 10) {
+                    const angle = Math.atan2(dy, dx);
+                    const currentMax = this.isSpooked ? this.maxSpeed * 1.5 : this.maxSpeed;
+                    const targetSpeed = Math.min(dist * 0.05, currentMax);
+
+                    this.vx += (Math.cos(angle) * targetSpeed - this.vx) * 0.12;
+                    this.vy += (Math.sin(angle) * targetSpeed - this.vy) * 0.12;
+
+                    if (Math.abs(this.vx) > 0.5) {
+                        this.facing = this.vx > 0 ? 1 : -1;
+                    }
+                } else {
+                    this.vx *= 0.9;
+                    this.vy *= 0.9;
+                }
+
+                this.speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                this.x += this.vx;
+                this.y += this.vy;
+
+                this.x = Math.max(40, Math.min(W - 40, this.x));
+                this.y = Math.max(100, Math.min(H - 40, this.y));
+
+                // Animation
+                if (this.speed > 0.3) {
+                    this.walkCycle += this.speed * 0.12;
+                }
+
+                this.tailWag = Math.sin(Date.now() * 0.008) * 0.3;
+
+                // Arch back
+                if (this.isSpooked && this.archBack < 1) this.archBack = Math.min(1, this.archBack + 0.15);
+                if (!this.isSpooked && this.archBack > 0) this.archBack = Math.max(0, this.archBack - 0.08);
+
+                // Update container position
+                this.container.x = this.x;
+                this.container.y = this.y + this.visualY;
+                this.container.scale.x = this.facing;
+
+                // Scale up at peak of jump
+                const jumpScale = 1 + (this.isJumping ? Math.sin(this.jumpProgress * Math.PI) * 0.15 : 0);
+                this.container.scale.y = jumpScale;
+                this.container.scale.x = this.facing * jumpScale;
+
+                this.draw();
+            }
+
+            draw() {
+                const g = this.graphics;
+                const s = this.shadow;
+                g.clear();
+                s.clear();
+
+                // Draw shadow (shrinks during jump)
+                const shadowScale = this.isJumping ? 1 - Math.sin(this.jumpProgress * Math.PI) * 0.5 : 1;
+                const shadowY = this.isJumping ? -this.visualY : 0;
+                s.ellipse(0, shadowY + 25, 25 * shadowScale, 8 * shadowScale).fill({ color: 0x000000, alpha: 0.2 });
+
+                const bodyColor = 0xFBF8F4;
+                const pointColor = 0x5C4033;
+                const pointLight = 0x7D6048;
+
+                const bob = Math.sin(this.walkCycle * 2) * 1.5 * Math.min(this.speed / 3, 1);
+                const archOffset = this.archBack * 8;
+
+                // Tail
+                const tailAngle = -0.8 + this.tailWag - this.archBack * 0.5;
+                const tailPuff = this.isSpooked ? 1.5 : 1;
+                g.moveTo(-18, bob - archOffset * 0.5);
+                g.quadraticCurveTo(-26, -20 + bob, -23 + this.tailWag * 10, -40 - this.archBack * 15 + bob);
+                g.stroke({ color: bodyColor, width: 5 * tailPuff, cap: 'round' });
+                g.circle(-23 + this.tailWag * 10, -40 - this.archBack * 15 + bob, 4 * tailPuff).fill(pointColor);
+
+                // Back legs
+                this.drawLeg(g, -12, 4, bodyColor, pointColor, 0.5, bob, archOffset);
+
+                // Body
+                if (this.isSpooked) {
+                    g.ellipse(0, bob - archOffset, 18, 14 + archOffset * 0.3).fill(bodyColor);
+                } else {
+                    g.ellipse(0, bob, 20, 12).fill(bodyColor);
+                }
+
+                // Front legs
+                this.drawLeg(g, 12, 3, bodyColor, pointColor, 0, bob, archOffset);
+
+                // Head
+                const headY = -3 + bob - archOffset * 0.7;
+
+                // Ears
+                for (const ex of [-7, 7]) {
+                    const earFlat = this.isSpooked ? 0.6 : 0.15;
+                    const earH = this.isSpooked ? 7 : 9;
+                    g.ellipse(22 + ex, headY - 10, 5, earH).fill(bodyColor);
+                    g.ellipse(22 + ex, headY - 13, 3, 4).fill(pointLight);
+                }
+
+                // Head
+                g.ellipse(22, headY, 13, 11).fill(bodyColor);
+
+                // Face mask
+                g.ellipse(22, headY + 3, 8, 6).fill(pointLight);
+                g.ellipse(22, headY + 5, 6, 5).fill(pointColor);
+
+                // Muzzle
+                g.ellipse(22, headY + 4, 4, 3).fill(0xFDF9F5);
+
+                // Nose
+                g.poly([22, headY + 2.5, 20.5, headY + 4.5, 23.5, headY + 4.5]).fill(0xEAAFAF);
+
+                // Eyes
+                const eyeScale = this.isSpooked ? 1.4 : 1;
+                for (const ex of [-5, 5]) {
+                    g.ellipse(22 + ex, headY - 1, 4 * eyeScale, 5 * eyeScale).fill(0x5DADE2);
+                    g.ellipse(22 + ex, headY - 1, 1 * eyeScale, 3.5 * eyeScale).fill(0x1A1A1A);
+                    g.circle(22 + ex - 1, headY - 3, 1.2).fill(0xFFFFFF);
+                }
+
+                // Whiskers
+                for (let i = 0; i < 3; i++) {
+                    g.moveTo(18, headY + 4 + i).lineTo(8, headY + 2 + i * 1.5);
+                    g.moveTo(26, headY + 4 + i).lineTo(36, headY + 2 + i * 1.5);
+                }
+                g.stroke({ color: 0xCCCCCC, width: 0.5 });
+            }
+
+            drawLeg(g, xOff, yOff, bodyColor, pointColor, phase, bob, archOffset) {
+                const lift = Math.sin(this.walkCycle + phase * Math.PI * 2) * 4 * Math.min(this.speed / 3, 1);
+                const ao = xOff > 0 ? archOffset * 0.5 : archOffset * 0.8;
+
+                g.ellipse(xOff, yOff - ao + 8 + bob, 5, 10).fill(bodyColor);
+                g.ellipse(xOff, yOff - ao + 20 + bob - Math.max(0, lift), 4, 8).fill(bodyColor);
+                g.ellipse(xOff, yOff - ao + 27 + bob - Math.max(0, lift), 5, 3).fill(pointColor);
+            }
+        }
+
+        // ========== T-REX RABBIT ==========
+        class TRexRabbit {
+            constructor() {
+                this.container = new PIXI.Container();
+                this.x = -100;
+                this.y = H - 80;
+                this.vx = 1.2;
+                this.walkCycle = 0;
+                this.facing = 1;
+                this.active = false;
+
+                this.buildGraphics();
+            }
+
+            buildGraphics() {
+                this.graphics = new PIXI.Graphics();
+                this.container.addChild(this.graphics);
+            }
+
+            start() {
+                this.active = true;
+                this.x = -100;
+                this.y = H - 80;
+                this.walkCycle = 0;
+            }
+
+            update(dt) {
+                if (!this.active) return;
+
+                this.x += this.vx;
+                this.walkCycle += 0.15;
+
+                // Remove when off screen
+                if (this.x > W + 100) {
+                    this.active = false;
+                }
+
+                this.container.x = this.x;
+                this.container.y = this.y;
+                this.container.scale.x = this.facing;
+
+                this.draw();
+            }
+
+            draw() {
+                const g = this.graphics;
+                g.clear();
+
+                const white = 0xFFFFFB;
+                const black = 0x1A1A1A;
+                const pink = 0xFFB6C1;
+
+                const bob = Math.sin(this.walkCycle) * 1.5;
+                const hop = Math.max(0, Math.sin(this.walkCycle * 0.5) * 8);
+
+                // Shadow
+                g.ellipse(0, 20 - hop * 0.3, 15, 5).fill({ color: 0x000000, alpha: 0.15 });
+
+                // Tiny T-Rex arms
+                g.ellipse(-8, -10 - hop, 3, 6).fill(white);
+                g.ellipse(8, -10 - hop, 3, 6).fill(white);
+
+                // Body with spots
+                g.ellipse(0, -5 - hop, 18, 20).fill(white);
+                
+                // Black splotches
+                g.circle(-5, -8 - hop, 4).fill(black);
+                g.circle(6, -2 - hop, 3.5).fill(black);
+                g.ellipse(2, 4 - hop, 5, 4).fill(black);
+
+                // Big back legs
+                const legBob = Math.sin(this.walkCycle) * 3;
+                g.ellipse(-6, 10 - hop + legBob, 6, 12).fill(white);
+                g.ellipse(6, 10 - hop - legBob, 6, 12).fill(white);
+                
+                // Feet
+                g.ellipse(-6, 20 - hop * 0.5 + legBob, 8, 4).fill(pink);
+                g.ellipse(6, 20 - hop * 0.5 - legBob, 8, 4).fill(pink);
+
+                // Head
+                g.circle(0, -18 - hop, 12).fill(white);
+
+                // Long ears
+                g.ellipse(-5, -30 - hop + Math.sin(this.walkCycle) * 2, 4, 14).fill(white);
+                g.ellipse(5, -30 - hop - Math.sin(this.walkCycle) * 2, 4, 14).fill(white);
+                g.ellipse(-5, -32 - hop + Math.sin(this.walkCycle) * 2, 2.5, 10).fill(pink);
+                g.ellipse(5, -32 - hop - Math.sin(this.walkCycle) * 2, 2.5, 10).fill(pink);
+
+                // Face
+                g.circle(-4, -18 - hop, 2).fill(black); // Eye
+                g.circle(4, -18 - hop, 2).fill(black);  // Eye
+                g.circle(0, -14 - hop, 2).fill(pink);   // Nose
+
+                // Whiskers
+                g.moveTo(-8, -15 - hop).lineTo(-14, -15 - hop);
+                g.moveTo(8, -15 - hop).lineTo(14, -15 - hop);
+                g.stroke({ color: black, width: 0.5 });
+            }
+        }
+
+        // ========== RACCOON HEAD ==========
+        class Raccoon {
+            constructor() {
+                this.container = new PIXI.Container();
+                this.graphics = new PIXI.Graphics();
+                this.x = 0;
+                this.y = 0;
+                this.active = false;
+                this.lifetime = 0;
+                this.maxLifetime = 300; // 5 seconds at 60fps
+
+                this.container.addChild(this.graphics);
+            }
+
+            draw() {
+                const g = this.graphics;
+                g.clear();
+
+                const gray = 0x7A7A7A;
+                const darkGray = 0x4A4A4A;
+                const black = 0x1A1A1A;
+                const white = 0xFFFFFB;
+                const lightGray = 0xA0A0A0;
+
+                // Pointy ears (bigger for distraction raccoon)
+                g.poly([-20, -42, -14, -30, -26, -30]).fill(gray);
+                g.poly([20, -42, 26, -30, 14, -30]).fill(gray);
+                g.poly([-19, -39, -16, -32, -24, -32]).fill(darkGray);
+                g.poly([19, -39, 24, -32, 16, -32]).fill(darkGray);
+
+                // Head - more elongated
+                g.ellipse(0, -8, 24, 30).fill(gray);
+                
+                // Snout area
+                g.ellipse(0, 8, 26, 20).fill(lightGray);
+
+                // Black mask pattern - distinctive raccoon look
+                g.ellipse(-13, -12, 12, 15).fill(black);
+                g.ellipse(13, -12, 12, 15).fill(black);
+                
+                // Bridge between eyes
+                g.rect(-5, -16, 10, 13).fill(lightGray);
+
+                // Eyes in black patches
+                g.circle(-13, -12, 7).fill(white);
+                g.circle(13, -12, 7).fill(white);
+                g.circle(-13, -12, 5).fill(black);
+                g.circle(13, -12, 5).fill(black);
+                g.circle(-15, -15, 2).fill(white); // shine
+                g.circle(11, -15, 2).fill(white);
+
+                // Nose
+                g.ellipse(0, 12, 6, 5).fill(black);
+
+                // Mouth
+                g.moveTo(0, 12).lineTo(0, 18);
+                g.moveTo(0, 18).quadraticCurveTo(-5, 20, -8, 18);
+                g.moveTo(0, 18).quadraticCurveTo(5, 20, 8, 18);
+                g.stroke({ color: black, width: 2 });
+
+                // Whiskers
+                g.moveTo(-26, 5).lineTo(-42, 2);
+                g.moveTo(-26, 10).lineTo(-42, 10);
+                g.moveTo(-26, 15).lineTo(-42, 18);
+                g.moveTo(26, 5).lineTo(42, 2);
+                g.moveTo(26, 10).lineTo(42, 10);
+                g.moveTo(26, 15).lineTo(42, 18);
+                g.stroke({ color: 0x444444, width: 1.5 });
+            }
+
+            appear() {
+                if (this.active) return;
+                
+                this.active = true;
+                this.lifetime = 0;
+
+                // Random edge position
+                const edge = Math.floor(Math.random() * 4);
+                switch(edge) {
+                    case 0: // Top
+                        this.x = 100 + Math.random() * (W - 200);
+                        this.y = 80;
+                        break;
+                    case 1: // Right
+                        this.x = W - 80;
+                        this.y = 150 + Math.random() * (H - 300);
+                        break;
+                    case 2: // Bottom
+                        this.x = 100 + Math.random() * (W - 200);
+                        this.y = H - 80;
+                        break;
+                    case 3: // Left
+                        this.x = 80;
+                        this.y = 150 + Math.random() * (H - 300);
+                        break;
+                }
+
+                this.container.x = this.x;
+                this.container.y = this.y;
+                this.container.alpha = 0;
+
+                this.draw();
+
+                // Show warning message
+                statusEl.textContent = "Oh no! Teddy sees a raccoon!";
+                statusEl.classList.add('show');
+            }
+
+            update(dt) {
+                if (!this.active) return;
+
+                this.lifetime++;
+
+                // Fade in/out
+                if (this.lifetime < 30) {
+                    this.container.alpha = this.lifetime / 30;
+                } else if (this.lifetime > this.maxLifetime - 30) {
+                    this.container.alpha = (this.maxLifetime - this.lifetime) / 30;
+                } else {
+                    this.container.alpha = 1;
+                }
+
+                // Wave slightly
+                this.container.scale.x = 1 + Math.sin(this.lifetime * 0.1) * 0.05;
+                this.container.scale.y = 1 + Math.cos(this.lifetime * 0.1) * 0.05;
+
+                if (this.lifetime >= this.maxLifetime) {
+                    this.active = false;
+                    this.container.alpha = 0;
+                }
+            }
+        }
+
+        // ========== START RACCOON (Upper Left Corner) ==========
+        class StartRaccoon {
+            constructor() {
+                this.container = new PIXI.Container();
+                this.container.x = 100;
+                this.container.y = 100;
+                this.container.alpha = 0; // Start hidden
+                this.graphics = new PIXI.Graphics();
+                this.visible = false;
+
+                this.container.addChild(this.graphics);
+                this.draw();
+            }
+
+            draw() {
+                const g = this.graphics;
+                g.clear();
+
+                const gray = 0x7A7A7A;
+                const darkGray = 0x4A4A4A;
+                const black = 0x1A1A1A;
+                const white = 0xFFFFFB;
+                const lightGray = 0xA0A0A0;
+
+                // Pointy ears
+                g.poly([-12, -25, -8, -18, -16, -18]).fill(gray);
+                g.poly([12, -25, 16, -18, 8, -18]).fill(gray);
+                g.poly([-11, -23, -9, -19, -14, -19]).fill(darkGray);
+                g.poly([11, -23, 14, -19, 9, -19]).fill(darkGray);
+
+                // Head - more elongated
+                g.ellipse(0, -5, 14, 18).fill(gray);
+                
+                // Snout area
+                g.ellipse(0, 5, 16, 12).fill(lightGray);
+
+                // Black mask pattern - distinctive raccoon look
+                g.ellipse(-8, -8, 7, 9).fill(black);
+                g.ellipse(8, -8, 7, 9).fill(black);
+                
+                // Bridge between eyes
+                g.rect(-3, -10, 6, 8).fill(lightGray);
+
+                // Eyes in black patches
+                g.circle(-8, -8, 4).fill(white);
+                g.circle(8, -8, 4).fill(white);
+                g.circle(-8, -8, 2).fill(black);
+                g.circle(8, -8, 2).fill(black);
+                g.circle(-9, -10, 1).fill(white); // shine
+
+                // Nose
+                g.ellipse(0, 6, 4, 3).fill(black);
+
+                // Mouth line
+                g.moveTo(0, 6).lineTo(0, 10);
+                g.stroke({ color: black, width: 1 });
+
+                // Whiskers
+                g.moveTo(-16, 3).lineTo(-26, 1);
+                g.moveTo(-16, 6).lineTo(-26, 6);
+                g.moveTo(-16, 9).lineTo(-26, 11);
+                g.moveTo(16, 3).lineTo(26, 1);
+                g.moveTo(16, 6).lineTo(26, 6);
+                g.moveTo(16, 9).lineTo(26, 11);
+                g.stroke({ color: 0x555555, width: 1 });
+            }
+
+            show() {
+                this.visible = true;
+                this.container.alpha = 1;
+            }
+
+            hide() {
+                this.visible = false;
+                this.container.alpha = 0;
+            }
+
+            update() {
+                if (this.visible) {
+                    // Gentle breathing animation
+                    const time = Date.now() * 0.001;
+                    this.container.scale.x = 1 + Math.sin(time * 2) * 0.03;
+                    this.container.scale.y = 1 + Math.cos(time * 2) * 0.03;
+                }
+            }
+        }
+
+        // ========== HEART PARTICLES ==========
+        function spawnHeart(x, y) {
+            const heart = {
+                x: x + (Math.random() - 0.5) * 30,
+                y: y,
+                vy: -2 - Math.random() * 2,
+                life: 1,
+                scale: 0.5 + Math.random() * 0.5,
+                graphics: new PIXI.Graphics()
+            };
+
+            drawHeart(heart.graphics, heart.scale);
+            heart.graphics.x = heart.x;
+            heart.graphics.y = heart.y;
+            effectsContainer.addChild(heart.graphics);
+            hearts.push(heart);
+        }
+
+        function drawHeart(g, scale) {
+            g.scale.set(scale);
+            // Simple heart shape
+            g.moveTo(0, -5);
+            g.bezierCurveTo(-10, -15, -15, 0, 0, 10);
+            g.moveTo(0, -5);
+            g.bezierCurveTo(10, -15, 15, 0, 0, 10);
+            g.fill(0xFF6B8A);
+        }
+
+        function updateHearts(dt) {
+            for (let i = hearts.length - 1; i >= 0; i--) {
+                const h = hearts[i];
+                h.y += h.vy;
+                h.life -= 0.02;
+                h.graphics.x = h.x;
+                h.graphics.y = h.y;
+                h.graphics.alpha = h.life;
+
+                if (h.life <= 0) {
+                    effectsContainer.removeChild(h.graphics);
+                    hearts.splice(i, 1);
+                }
+            }
+        }
+
+        // ========== CAT AI ==========
+        function updateCatAI() {
+            const dx = sugar.x - teddy.x;
+            const dy = sugar.y - teddy.y;
+            const distToDog = Math.sqrt(dx * dx + dy * dy);
+
+            const level = gameState.level;
+            const hideTime = Math.max(40, 120 - level * 12);
+            const spookChance = 0.008 + level * 0.004;
+
+            // Hiding
+            sugar.hidingFurniture = isUnderFurniture(sugar.x, sugar.y);
+            if (sugar.hidingFurniture && distToDog < 120) {
+                sugar.hideTimer++;
+                sugar.isHiding = sugar.hideTimer < hideTime;
+            } else {
+                sugar.hideTimer = 0;
+                sugar.isHiding = false;
+            }
+
+            // Spooked logic
+            sugar.spookCooldown = Math.max(0, sugar.spookCooldown - 1);
+            if (distToDog < 120 && !sugar.isSpooked && sugar.spookCooldown === 0 && Math.random() < spookChance) {
+                sugar.isSpooked = true;
+                sugar.spookedTimer = 60 + level * 15 + Math.random() * 30;
+                sugar.startJump(); // Start a visible jump!
+            }
+
+            if (sugar.isSpooked) {
+                sugar.spookedTimer--;
+                // Random jumps while spooked
+                if (Math.random() < 0.03 + level * 0.01) {
+                    sugar.startJump();
+                }
+                if (sugar.spookedTimer <= 0) {
+                    sugar.isSpooked = false;
+                    sugar.spookCooldown = Math.max(60, 150 - level * 15);
+                }
+            }
+
+            let targetX, targetY;
+
+            if (sugar.isSpooked) {
+                // Random direction away from dog
+                const fleeAngle = Math.atan2(dy, dx) + (Math.random() - 0.5) * 1.5;
+                targetX = sugar.x + Math.cos(fleeAngle) * 200;
+                targetY = sugar.y + Math.sin(fleeAngle) * 200;
+                targetX = Math.max(60, Math.min(W - 60, targetX));
+                targetY = Math.max(100, Math.min(H - 60, targetY));
+            } else if (sugar.isHiding) {
+                targetX = sugar.x;
+                targetY = sugar.y;
+            } else {
+                // Flee / find hiding spot
+                const fleeAngle = Math.atan2(dy, dx);
+                const wobble = Math.sin(Date.now() * 0.002) * 0.4;
+
+                let hideTarget = null;
+                if (distToDog < 180) {
+                    let bestScore = -Infinity;
+                    for (const f of furniture) {
+                        if (f.canHide) {
+                            const hx = f.x + f.width / 2;
+                            const hy = f.y + f.height * 0.7;
+                            const catDist = Math.sqrt((sugar.x - hx) ** 2 + (sugar.y - hy) ** 2);
+                            const dogDist = Math.sqrt((teddy.x - hx) ** 2 + (teddy.y - hy) ** 2);
+                            const score = dogDist - catDist * 0.6;
+                            if (score > bestScore) {
+                                bestScore = score;
+                                hideTarget = { x: hx, y: hy };
+                            }
+                        }
+                    }
+                }
+
+                if (hideTarget && distToDog < 150) {
+                    targetX = hideTarget.x;
+                    targetY = hideTarget.y;
+                } else {
+                    targetX = sugar.x + Math.cos(fleeAngle + wobble) * 120;
+                    targetY = sugar.y + Math.sin(fleeAngle + wobble) * 120;
+                    targetX = Math.max(60, Math.min(W - 60, targetX));
+                    targetY = Math.max(100, Math.min(H - 60, targetY));
+                }
+            }
+
+            sugar.update(targetX, targetY, 1);
+        }
+
+        // ========== Y-SORTING ==========
+        function sortByY() {
+            // Sort animals and furniture by Y for depth
+            const items = [];
+
+            for (const f of furniture) {
+                items.push({ y: f.y + f.height, container: f.graphics, type: 'furniture' });
+            }
+            items.push({ y: teddy.y, container: teddy.container, type: 'teddy' });
+            items.push({ y: sugar.y, container: sugar.container, type: 'sugar' });
+            
+            // Add T-Rex rabbit if active
+            if (tRexRabbit && tRexRabbit.active) {
+                items.push({ y: tRexRabbit.y, container: tRexRabbit.container, type: 'rabbit' });
+            }
+
+            items.sort((a, b) => a.y - b.y);
+
+            // Rebuild scene order
+            furnitureContainer.removeChildren();
+            animalContainer.removeChildren();
+
+            for (const item of items) {
+                if (item.type === 'furniture') {
+                    furnitureContainer.addChild(item.container);
+                } else {
+                    animalContainer.addChild(item.container);
+                }
+            }
+        }
+
+        // ========== GAME LOGIC ==========
+        let lastTime = 0;
+        let countdownStart = 0;
+
+        function showNarrative(type, extraText = '') {
+            playerNameInput.classList.add('hidden');
+            narrativeEl.classList.remove('game-over');
+
+            if (type === 'name-entry') {
+                narrativeTitle.textContent = 'Welcome!';
+                narrativeText.textContent = 'Enter your name to play!';
+                narrativeBtn.textContent = 'Start Game';
+                playerNameInput.classList.remove('hidden');
+                playerNameInput.value = gameState.playerName || '';
+                displayLeaderboard();
+                if (startRaccoon) startRaccoon.hide(); // Keep hidden on start screen
+            } else if (type === 'intro') {
+                narrativeTitle.textContent = 'Teddy & Sugar';
+                narrativeText.textContent = `${gameState.playerName}, help Teddy catch his friend Sugar! Use the Arrow Keys to move Teddy around the room. Sugar will try to hide and jump away - catch her before time runs out!`;
+                narrativeBtn.textContent = "Let's Play!";
+                leaderboardEl.classList.add('hidden');
+                if (startRaccoon) startRaccoon.hide();
+            } else if (type === 'caught') {
+                narrativeTitle.textContent = 'Got Her!';
+                narrativeText.textContent = `Teddy gives Sugar gentle nibbles! ${extraText}`;
+                narrativeBtn.textContent = 'Next Level';
+                displayLeaderboard(gameState.totalScore);
+            } else if (type === 'level-up') {
+                narrativeTitle.textContent = `Level ${gameState.level}!`;
+                const timeLimit = Math.max(15, 30 - (gameState.level - 1) * 2);
+                narrativeText.textContent = `Sugar's getting faster and the room is more crowded! You have ${timeLimit} seconds. Total score: ${gameState.totalScore} points`;
+                narrativeBtn.textContent = 'Chase Her!';
+                leaderboardEl.classList.add('hidden');
+            } else if (type === 'game-over') {
+                narrativeTitle.textContent = "Time's Up!";
+                narrativeText.textContent = `Sugar got away! You reached Level ${gameState.level}. Total score: ${gameState.totalScore} points`;
+                narrativeBtn.textContent = 'Play Again';
+                narrativeEl.classList.add('game-over');
+                displayLeaderboard(gameState.totalScore);
+                if (startRaccoon) startRaccoon.show();
+            }
+
+            narrativeEl.classList.remove('hidden');
+        }
+
+        function advanceNarrative() {
+            if (gameState.phase === 'name-entry') {
+                const name = playerNameInput.value.trim() || 'Player';
+                gameState.playerName = name;
+                playerNameDisplay.textContent = name;
+                gameState.phase = 'intro';
+                showNarrative('intro');
+            } else if (gameState.phase === 'intro' || gameState.phase === 'level-up') {
+                startRound();
+            } else if (gameState.phase === 'caught') {
+                gameState.level++;
+                gameState.phase = 'level-up';
+                showNarrative('level-up');
+            } else if (gameState.phase === 'game-over') {
+                // Reset everything
+                gameState.level = 1;
+                gameState.totalScore = 0;
+                gameState.phase = 'intro';
+                raccoonHasAppeared = false; // Reset raccoon flag
+                showNarrative('intro');
+            }
+        }
+        window.advanceNarrative = advanceNarrative;
+
+        function startRound() {
+            gameState.phase = 'countdown';
+            gameState.maxTime = Math.max(15, 30 - (gameState.level - 1) * 2);
+            gameState.timeRemaining = gameState.maxTime;
+            gameState.roundStartTime = 0;
+            gameState.roundScore = 0;
+            gameState.maxPointsPerLevel = 1000 + (gameState.level - 1) * 200; // Increase max points each level
+            countdownStart = performance.now();
+
+            gameInfoEl.classList.remove('hidden');
+            levelNumEl.textContent = gameState.level;
+            totalScoreEl.textContent = gameState.totalScore;
+            controlsHint.classList.remove('hidden');
+            sprintIndicator.classList.remove('hidden');
+            timerBox.className = 'timer';
+
+            // Generate furniture for this level
+            generateFurniture(gameState.level);
+
+            // Scale difficulty
+            sugar.maxSpeed = 4 + (gameState.level - 1) * 0.5;
+            teddy.maxSpeed = 5.5 + (gameState.level - 1) * 0.15;
+
+            // Reset positions
+            teddy.x = 120;
+            teddy.y = H / 2;
+            teddy.vx = 0;
+            teddy.vy = 0;
+            teddy.facing = 1;
+            teddy.catchSquash = 0;
+            teddy.sprintCooldown = 0;
+            teddy.sprintDuration = 0;
+
+            sugar.x = W - 120;
+            sugar.y = H / 2;
+            sugar.vx = 0;
+            sugar.vy = 0;
+            sugar.facing = -1;
+            sugar.isSpooked = false;
+            sugar.spookedTimer = 0;
+            sugar.spookCooldown = 0;
+            sugar.archBack = 0;
+            sugar.hideTimer = 0;
+            sugar.isJumping = false;
+
+            // Start T-Rex Rabbit in level 3+
+            if (gameState.level >= 3) {
+                tRexRabbit.start();
+            } else {
+                tRexRabbit.active = false;
+            }
+
+            // Deactivate raccoon
+            raccoon.active = false;
+
+            // Hide start raccoon during gameplay
+            if (startRaccoon) startRaccoon.hide();
+
+            narrativeEl.classList.add('hidden');
+            sprintIndicator.classList.add('hidden');
+            lastTime = performance.now();
+        }
+
+        function checkCatch() {
+            const dx = teddy.x - sugar.x;
+            const dy = teddy.y - sugar.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < 45 && !sugar.isHiding && !sugar.isJumping) {
+                gameState.phase = 'catching';
+                gameState.catchAnimTime = 0;
+                controlsHint.classList.add('hidden');
+            }
+        }
+
+        function gameLoop(ticker) {
+            const dt = ticker.deltaTime;
+            const currentTime = performance.now();
+
+            updateHearts(dt);
+            
+            // Always update start raccoon animation
+            if (startRaccoon) startRaccoon.update();
+
+            if (gameState.phase === 'countdown') {
+                const elapsed = (currentTime - countdownStart) / 1000;
+                const remaining = Math.ceil(3 - elapsed);
+
+                if (remaining <= 0) {
+                    gameState.phase = 'playing';
+                    lastTime = currentTime;
+                    statusEl.classList.remove('show');
+                } else {
+                    statusEl.textContent = remaining === 3 ? 'Get ready!' : remaining === 2 ? 'Set...' : 'GO!';
+                    statusEl.classList.add('show');
+                }
+
+                teddy.update(dt);
+                sugar.update(sugar.x, sugar.y, dt);
+
+                // Update T-Rex Rabbit even during countdown
+                if (tRexRabbit) tRexRabbit.update(dt);
+
+            } else if (gameState.phase === 'playing') {
+                const timeDelta = (currentTime - lastTime) / 1000;
+                lastTime = currentTime;
+
+                // Track round start time
+                if (gameState.roundStartTime === 0) {
+                    gameState.roundStartTime = currentTime;
+                }
+
+                gameState.timeRemaining -= timeDelta;
+                timerDisplay.textContent = Math.max(0, gameState.timeRemaining).toFixed(1);
+
+                // Timer color warnings
+                if (gameState.timeRemaining <= 5) {
+                    timerBox.className = 'timer danger';
+                } else if (gameState.timeRemaining <= 10) {
+                    timerBox.className = 'timer warning';
+                } else {
+                    timerBox.className = 'timer';
+                }
+
+                // Time's up!
+                if (gameState.timeRemaining <= 0) {
+                    gameState.phase = 'game-over';
+                    if (gameState.totalScore > 0) {
+                        saveToLeaderboard(gameState.playerName, gameState.totalScore, gameState.level);
+                    }
+                    showNarrative('game-over', '');
+                    return;
+                }
+
+                teddy.update(dt);
+                updateCatAI();
+                checkCatch();
+
+                // Update sprint indicator
+                if (teddy.sprintDuration > 0) {
+                    const remaining = teddy.maxSprintDuration - teddy.sprintDuration;
+                    sprintIndicator.textContent = `Sprint: ${(remaining / 60).toFixed(1)}s`;
+                    sprintIndicator.className = 'sprint-indicator active';
+                    sprintIndicator.classList.remove('hidden');
+                } else if (teddy.sprintCooldown > 0) {
+                    const cooldownSec = (teddy.sprintCooldown / 60).toFixed(1);
+                    sprintIndicator.textContent = `Sprint: ${cooldownSec}s`;
+                    sprintIndicator.className = 'sprint-indicator';
+                    sprintIndicator.classList.remove('hidden');
+                } else {
+                    sprintIndicator.textContent = 'Sprint Ready! (Shift)';
+                    sprintIndicator.className = 'sprint-indicator ready';
+                    sprintIndicator.classList.remove('hidden');
+                }
+
+                // Update T-Rex Rabbit
+                if (tRexRabbit) tRexRabbit.update(dt);
+
+                // Update Raccoon
+                if (raccoon) raccoon.update(dt);
+
+                // Clear raccoon message when raccoon disappears
+                if (raccoon && !raccoon.active && teddy.isDistracted) {
+                    teddy.isDistracted = false;
+                    teddy.distractedTimer = 0;
+                    statusEl.classList.remove('show');
+                }
+
+                // Trigger raccoon appearance (once per game, level 3+)
+                if (gameState.level >= 3 && !raccoonHasAppeared && !raccoon.active) {
+                    // Random chance to appear (5% per frame while playing)
+                    if (Math.random() < 0.0008) {
+                        raccoon.appear();
+                        raccoonHasAppeared = true;
+                        teddy.isDistracted = true;
+                        teddy.distractedTimer = 0;
+                    }
+                }
+
+                // Status messages
+                if (sugar.isHiding) {
+                    statusEl.textContent = "Sugar is hiding!";
+                    statusEl.classList.add('show');
+                } else if (sugar.isSpooked) {
+                    statusEl.textContent = "Sugar is spooked!";
+                    statusEl.classList.add('show');
+                } else {
+                    statusEl.classList.remove('show');
+                }
+
+            } else if (gameState.phase === 'catching') {
+                gameState.catchAnimTime += ticker.deltaMS;
+
+                teddy.update(dt);
+                sugar.update(sugar.x, sugar.y, dt);
+
+                // Update T-Rex Rabbit
+                if (tRexRabbit) tRexRabbit.update(dt);
+
+                // Update Raccoon
+                if (raccoon) raccoon.update(dt);
+
+                // Spawn hearts during catch
+                if (Math.random() < 0.15) {
+                    spawnHeart((teddy.x + sugar.x) / 2, Math.min(teddy.y, sugar.y) - 30);
+                }
+
+                // After 2 seconds, show narrative
+                if (gameState.catchAnimTime >= 2000) {
+                    const catchTime = gameState.maxTime - gameState.timeRemaining;
+                    
+                    // Calculate points: faster catch = more points
+                    // Points decrease linearly from maxPoints to 100 based on time taken
+                    const timeRatio = catchTime / gameState.maxTime; // 0 to 1
+                    const pointsEarned = Math.round(gameState.maxPointsPerLevel * (1 - timeRatio * 0.9) + 100);
+                    
+                    gameState.roundScore = pointsEarned;
+                    gameState.totalScore += pointsEarned;
+                    totalScoreEl.textContent = gameState.totalScore;
+
+                    gameState.phase = 'caught';
+                    showNarrative('caught', `Caught in ${catchTime.toFixed(1)}s! +${pointsEarned} points! Total: ${gameState.totalScore} points`);
+                }
+            }
+
+            // Always sort by Y for proper depth
+            sortByY();
+        }
+
+        // Start the game
+        initPixi();
+    </script>
+</body>
+</html>

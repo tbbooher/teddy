@@ -1,0 +1,12 @@
+{
+  "name": "golden-doodle-chase",
+  "version": "1.0.0",
+  "description": "An adorable animated golden doodle that chases your mouse",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
