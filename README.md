@@ -33,7 +33,7 @@ All game graphics are **procedurally drawn** using the PixiJS Graphics API - no 
 - **Dynamic difficulty scaling** - Increasing challenge across levels
 - **State machine** - Clean phase management (name-entry, countdown, playing, catching, etc.)
 
-## 🎯 Game Mechanics & Strategy
+## Game Mechanics & Strategy
 
 ### Basic Controls
 - **Arrow Keys** or **WASD** - Move Teddy around
@@ -66,7 +66,7 @@ Points are awarded based on **speed**:
 - **Spooked**: Randomly jumps and runs faster when startled
 - **Smart pathfinding**: Chooses hiding spots based on distance from Teddy
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - Node.js (v14 or higher)
@@ -90,7 +90,7 @@ Open your browser and navigate to:
 http://localhost:3000
 ```
 
-## 🎨 Features
+## Features
 
 ### Visual Elements
 - **Procedural art style** - All graphics drawn programmatically
