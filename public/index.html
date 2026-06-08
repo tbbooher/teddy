@@ -286,6 +286,62 @@
             if (e.key === 'Shift') keys.shift = false;
         });
 
+        // ========== AUDIO - FART SOUNDS ==========
+        let audioCtx = null;
+        let lastFartTime = 0;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playFart() {
+            if (!audioCtx) initAudio();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const now = audioCtx.currentTime;
+
+            // Random fart duration
+            const duration = 0.15 + Math.random() * 0.25;
+
+            // Create noise buffer for fart sound
+            const bufferSize = audioCtx.sampleRate * duration;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+
+            // Generate "fart" noise - low frequency rumble
+            let phase = 0;
+            const baseFreq = 60 + Math.random() * 40; // Low rumble
+            for (let i = 0; i < bufferSize; i++) {
+                // Mix of low frequency oscillation and noise
+                phase += baseFreq / audioCtx.sampleRate;
+                const lowRumble = Math.sin(phase * Math.PI * 2) * 0.5;
+                const noise = (Math.random() - 0.5) * 0.5;
+                const flutter = Math.sin(phase * Math.PI * 2 * 3) * 0.3; // Flutter
+                data[i] = (lowRumble + noise + flutter) * (1 - i / bufferSize); // Fade out
+            }
+
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+
+            // Low pass filter for more "muffled" sound
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 300 + Math.random() * 200;
+
+            // Gain for volume
+            const gain = audioCtx.createGain();
+            gain.gain.value = 0.3;
+
+            source.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            source.start(now);
+            source.stop(now + duration);
+        }
+
         // ========== PIXI SETUP ==========
         let app, W, H;
         let floorContainer, furnitureContainer, animalContainer, effectsContainer;
@@ -296,6 +352,8 @@
         let raccoon = null;
         let raccoonHasAppeared = false;
         let startRaccoon = null;
+        let hausfrau = null;
+        let hausfrauHasAppeared = false;
 
         async function initPixi() {
             app = new PIXI.Application();
@@ -330,11 +388,13 @@
             tRexRabbit = new TRexRabbit();
             raccoon = new Raccoon();
             startRaccoon = new StartRaccoon();
+            hausfrau = new Hausfrau();
             animalContainer.addChild(teddy.container);
             animalContainer.addChild(sugar.container);
             animalContainer.addChild(tRexRabbit.container);
             effectsContainer.addChild(raccoon.container);
             effectsContainer.addChild(startRaccoon.container);
+            effectsContainer.addChild(hausfrau.container);
 
             // Handle resize
             window.addEventListener('resize', () => {
@@ -575,8 +635,16 @@
                 this.distractedTimer = 0;
                 this.sprintCooldown = 0;
                 this.sprintDuration = 0;
-                this.maxSprintDuration = 180; // 3 seconds at 60fps
-                this.sprintCooldownTime = 600; // 10 seconds at 60fps
+                this.maxSprintDuration = 300; // 5 seconds at 60fps
+                this.sprintCooldownTime = 300; // 5 seconds cooldown at 60fps
+
+                this.isScared = false;
+                this.scaredTimer = 0;
+                this.maxScaredTime = 180; // 3 seconds at 60fps
+
+                // Butt wiggle when excited (level 5+)
+                this.isWigglingButt = false;
+                this.buttWiggle = 0;
 
                 this.buildGraphics();
             }
@@ -631,6 +699,27 @@
                         this.isDistracted = false;
                         this.distractedTimer = 0;
                     }
+                } else if (this.isScared) {
+                    // SCARED! Run to the left side of the screen!
+                    this.scaredTimer++;
+                    this.facing = -1; // Face left (running away)
+
+                    // Run fast to the left!
+                    this.vx = -8;
+                    this.vy = 0;
+
+                    this.x += this.vx;
+                    this.x = Math.max(80, this.x); // Stop at left edge
+
+                    this.speed = Math.abs(this.vx);
+                    this.walkCycle += this.speed * 0.15;
+                    this.tongueOut = 0; // Scared, no tongue
+
+                    // End scared state after 3 seconds
+                    if (this.scaredTimer >= this.maxScaredTime) {
+                        this.isScared = false;
+                        this.scaredTimer = 0;
+                    }
                 } else {
                     this.isCatching = false;
                     this.catchTime = 0;
@@ -640,48 +729,57 @@
                         this.sprintCooldown--;
                     }
 
-                    // Check if sprinting
-                    const isSprinting = keys.shift && this.sprintCooldown === 0 && 
-                                       (keys.up || keys.down || keys.left || keys.right);
-                    
-                    if (isSprinting && this.sprintDuration < this.maxSprintDuration) {
-                        this.sprintDuration++;
-                        if (this.sprintDuration >= this.maxSprintDuration) {
-                            this.sprintCooldown = this.sprintCooldownTime;
-                        }
-                    } else if (!isSprinting && this.sprintDuration > 0) {
-                        // Sprint ended, start cooldown
-                        this.sprintCooldown = this.sprintCooldownTime;
-                        this.sprintDuration = 0;
-                    }
-
-                    const currentMaxSpeed = isSprinting ? this.maxSpeed * 1.8 : this.maxSpeed;
-
-                    // Arrow key movement
+                    // Arrow key movement direction
                     let ax = 0, ay = 0;
                     if (keys.left) ax -= 1;
                     if (keys.right) ax += 1;
                     if (keys.up) ay -= 1;
                     if (keys.down) ay += 1;
 
+                    // Normalize diagonal movement
                     if (ax !== 0 && ay !== 0) {
                         ax *= 0.707;
                         ay *= 0.707;
                     }
 
-                    const accel = 0.5;
-                    const friction = 0.88;
+                    const isMoving = ax !== 0 || ay !== 0;
 
-                    this.vx += ax * accel;
-                    this.vy += ay * accel;
-                    this.vx *= friction;
-                    this.vy *= friction;
+                    // Sprint: hold shift while moving, cooldown must be 0
+                    const canSprint = keys.shift && this.sprintCooldown === 0 && isMoving;
+
+                    if (canSprint && this.sprintDuration < this.maxSprintDuration) {
+                        // SPRINTING! Move at 3x speed immediately
+                        this.sprintDuration++;
+                        const sprintSpeed = this.maxSpeed * 3;
+                        this.vx = ax * sprintSpeed;
+                        this.vy = ay * sprintSpeed;
+
+                        if (this.sprintDuration >= this.maxSprintDuration) {
+                            this.sprintCooldown = this.sprintCooldownTime;
+                            this.sprintDuration = 0;
+                        }
+                    } else {
+                        // Normal movement with acceleration/friction
+                        if (!canSprint && this.sprintDuration > 0) {
+                            // Sprint ended early, start cooldown
+                            this.sprintCooldown = this.sprintCooldownTime;
+                            this.sprintDuration = 0;
+                        }
+
+                        const accel = 0.5;
+                        const friction = 0.88;
+
+                        this.vx += ax * accel;
+                        this.vy += ay * accel;
+                        this.vx *= friction;
+                        this.vy *= friction;
+                    }
 
                     this.speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-                    if (this.speed > currentMaxSpeed) {
-                        this.vx = (this.vx / this.speed) * currentMaxSpeed;
-                        this.vy = (this.vy / this.speed) * currentMaxSpeed;
-                        this.speed = currentMaxSpeed;
+                    if (this.speed > this.maxSpeed * 3) {
+                        this.vx = (this.vx / this.speed) * this.maxSpeed * 3;
+                        this.vy = (this.vy / this.speed) * this.maxSpeed * 3;
+                        this.speed = this.maxSpeed * 3;
                     }
 
                     if (Math.abs(this.vx) > 0.3) {
@@ -740,17 +838,28 @@
                 // Head nibble - just dips DOWN, no forward movement
                 const nibbleDip = this.isCatching ? Math.abs(Math.sin(this.catchTime * 6)) * 10 : 0;
 
-                // Tail - wags excitedly when catching
+                // Butt wiggle animation - excited wiggly butt when close to Sugar!
+                if (this.isWigglingButt) {
+                    this.buttWiggle += 0.4;
+                } else {
+                    this.buttWiggle *= 0.8; // Slow down wiggle
+                }
+                const buttOffset = Math.sin(this.buttWiggle) * (this.isWigglingButt ? 8 : this.buttWiggle * 0.5);
+
+                // Tail - wags excitedly when catching or wiggling
+                const tailWagSpeed = this.isWigglingButt ? 0.05 : (this.isCatching ? 0.04 : 0.012);
+                const tailWagAmount = this.isWigglingButt ? 1.2 : (this.isCatching ? 0.8 : (0.3 + this.speed * 0.1));
+                this.tailWag = Math.sin(Date.now() * tailWagSpeed) * tailWagAmount;
                 const tailAngle = -0.5 + this.tailWag;
                 for (let i = 0; i < 5; i++) {
-                    const tx = -28 + Math.sin(tailAngle) * i * 4;
+                    const tx = -28 + Math.sin(tailAngle) * i * 4 + buttOffset;
                     const ty = -8 + bob - i * 7 - Math.cos(tailAngle) * i * 2;
                     g.circle(tx, ty, 6 - i * 0.5).fill(i % 2 === 0 ? furColor : furLight);
                 }
 
-                // Back legs
-                this.drawLeg(g, -18, 8, furDark, 0.5, bob);
-                this.drawLeg(g, -18, -3, furDark, 0, bob);
+                // Back legs - wiggle with butt
+                this.drawLeg(g, -18 + buttOffset * 0.5, 8, furDark, 0.5, bob);
+                this.drawLeg(g, -18 + buttOffset * 0.5, -3, furDark, 0, bob);
 
                 // Body - stable, no stretching
                 g.ellipse(0, bob, 32, 22).fill(furColor);
@@ -1238,14 +1347,28 @@
                 statusEl.classList.add('show');
             }
 
-            update(dt) {
+            update(dt, teddyX, teddyY) {
                 if (!this.active) return;
 
                 this.lifetime++;
 
+                // Check if Teddy is getting close - disappear RIGHT BEFORE he reaches it!
+                const dx = this.x - teddyX;
+                const dy = this.y - teddyY;
+                const distToTeddy = Math.sqrt(dx * dx + dy * dy);
+
+                // When Teddy gets within 80 pixels, start fading out fast
+                const closeEnough = distToTeddy < 80;
+
                 // Fade in/out
-                if (this.lifetime < 30) {
+                if (this.lifetime < 30 && !closeEnough) {
                     this.container.alpha = this.lifetime / 30;
+                } else if (closeEnough) {
+                    // Rapid fade out when Teddy is close!
+                    this.container.alpha = Math.max(0, this.container.alpha - 0.15);
+                    if (this.container.alpha <= 0) {
+                        this.active = false;
+                    }
                 } else if (this.lifetime > this.maxLifetime - 30) {
                     this.container.alpha = (this.maxLifetime - this.lifetime) / 30;
                 } else {
@@ -1347,6 +1470,171 @@
                     this.container.scale.x = 1 + Math.sin(time * 2) * 0.03;
                     this.container.scale.y = 1 + Math.cos(time * 2) * 0.03;
                 }
+            }
+        }
+
+        // ========== GERMAN HAUSFRAU ==========
+        class Hausfrau {
+            constructor() {
+                this.container = new PIXI.Container();
+                this.graphics = new PIXI.Graphics();
+                this.active = false;
+                this.lifetime = 0;
+                this.maxLifetime = 180; // 3 seconds at 60fps
+
+                this.container.addChild(this.graphics);
+                this.container.alpha = 0;
+            }
+
+            appear() {
+                if (this.active) return;
+
+                this.active = true;
+                this.lifetime = 0;
+
+                // Appear from the right side
+                this.container.x = W - 150;
+                this.container.y = H / 2;
+                this.container.alpha = 0;
+
+                this.draw();
+
+                // Show scary message
+                statusEl.textContent = '"You\'re not from Texas!"';
+                statusEl.style.fontSize = "28px";
+                statusEl.style.fontWeight = "bold";
+                statusEl.style.color = "#8B0000";
+                statusEl.classList.add('show');
+            }
+
+            update(dt) {
+                if (!this.active) return;
+
+                this.lifetime++;
+
+                // Fade in quickly
+                if (this.lifetime < 15) {
+                    this.container.alpha = this.lifetime / 15;
+                } else if (this.lifetime > this.maxLifetime - 20) {
+                    this.container.alpha = (this.maxLifetime - this.lifetime) / 20;
+                } else {
+                    this.container.alpha = 1;
+                }
+
+                // Angry shake
+                this.container.x = W - 150 + Math.sin(this.lifetime * 0.5) * 3;
+
+                // Breathing/heaving animation
+                this.container.scale.y = 1 + Math.sin(this.lifetime * 0.2) * 0.02;
+
+                if (this.lifetime >= this.maxLifetime) {
+                    this.active = false;
+                    this.container.alpha = 0;
+                    statusEl.style.color = "#5D4E37";
+                    statusEl.style.fontSize = "18px";
+                    statusEl.style.fontWeight = "normal";
+                }
+            }
+
+            draw() {
+                const g = this.graphics;
+                g.clear();
+
+                const skin = 0xFFDBB4;
+                const dress = 0x4A6741; // Traditional green dirndl
+                const dressLight = 0x5A7751;
+                const apron = 0xFFFFF0;
+                const hair = 0x8B7355;
+                const hairDark = 0x6B5344;
+                const black = 0x1A1A1A;
+                const white = 0xFFFFFB;
+                const red = 0xC41E3A;
+                const gunMetal = 0x3A3A3A;
+                const wood = 0x8B4513;
+
+                // Large woman - scale everything big
+                const scale = 2.5;
+
+                // Shadow
+                g.ellipse(0, 80 * scale, 35 * scale, 12 * scale).fill({ color: 0x000000, alpha: 0.2 });
+
+                // Dress/body - wide and imposing
+                g.ellipse(0, 30 * scale, 40 * scale, 50 * scale).fill(dress);
+                g.ellipse(0, 35 * scale, 38 * scale, 45 * scale).fill(dressLight);
+
+                // Apron
+                g.ellipse(0, 40 * scale, 25 * scale, 35 * scale).fill(apron);
+                g.rect(-20 * scale, 5 * scale, 40 * scale, 10 * scale).fill(apron);
+
+                // Arms - thick and strong
+                // Left arm (holding shotgun stock)
+                g.ellipse(-35 * scale, 10 * scale, 12 * scale, 20 * scale).fill(skin);
+                // Right arm (holding shotgun barrel)
+                g.ellipse(30 * scale, -5 * scale, 12 * scale, 18 * scale).fill(skin);
+
+                // SHOTGUN - held across body
+                // Stock (wood)
+                g.roundRect(-50 * scale, 5 * scale, 25 * scale, 8 * scale, 3).fill(wood);
+                // Receiver
+                g.roundRect(-28 * scale, 3 * scale, 15 * scale, 10 * scale, 2).fill(gunMetal);
+                // Barrel (double barrel)
+                g.roundRect(-15 * scale, 4 * scale, 55 * scale, 4 * scale, 2).fill(gunMetal);
+                g.roundRect(-15 * scale, 8 * scale, 55 * scale, 4 * scale, 2).fill(gunMetal);
+                // Barrel ends
+                g.circle(40 * scale, 6 * scale, 3 * scale).fill(black);
+                g.circle(40 * scale, 10 * scale, 3 * scale).fill(black);
+
+                // Hands gripping gun
+                g.ellipse(-38 * scale, 8 * scale, 6 * scale, 8 * scale).fill(skin);
+                g.ellipse(25 * scale, 6 * scale, 6 * scale, 7 * scale).fill(skin);
+
+                // Head - round and stern
+                g.circle(0, -35 * scale, 25 * scale).fill(skin);
+
+                // Hair - in a tight bun
+                g.ellipse(0, -55 * scale, 18 * scale, 12 * scale).fill(hair);
+                g.circle(0, -58 * scale, 10 * scale).fill(hairDark);
+                // Hair sides
+                g.ellipse(-20 * scale, -40 * scale, 8 * scale, 15 * scale).fill(hair);
+                g.ellipse(20 * scale, -40 * scale, 8 * scale, 15 * scale).fill(hair);
+
+                // Face - ANGRY
+                // Eyebrows - furrowed angrily
+                g.moveTo(-15 * scale, -45 * scale);
+                g.lineTo(-5 * scale, -42 * scale);
+                g.moveTo(15 * scale, -45 * scale);
+                g.lineTo(5 * scale, -42 * scale);
+                g.stroke({ color: hairDark, width: 4 * scale, cap: 'round' });
+
+                // Eyes - glaring
+                g.ellipse(-10 * scale, -38 * scale, 5 * scale, 4 * scale).fill(white);
+                g.ellipse(10 * scale, -38 * scale, 5 * scale, 4 * scale).fill(white);
+                g.circle(-10 * scale, -38 * scale, 3 * scale).fill(black);
+                g.circle(10 * scale, -38 * scale, 3 * scale).fill(black);
+                // Angry squint lines under eyes
+                g.moveTo(-15 * scale, -35 * scale).lineTo(-5 * scale, -34 * scale);
+                g.moveTo(15 * scale, -35 * scale).lineTo(5 * scale, -34 * scale);
+                g.stroke({ color: 0xDDAA99, width: 1.5 * scale });
+
+                // Nose - prominent
+                g.ellipse(0, -30 * scale, 4 * scale, 6 * scale).fill(0xEECCAA);
+
+                // Mouth - BIG ANGRY FROWN
+                g.moveTo(-12 * scale, -20 * scale);
+                g.quadraticCurveTo(0, -15 * scale, 12 * scale, -20 * scale);
+                g.stroke({ color: red, width: 3 * scale, cap: 'round' });
+
+                // Frown lines at corners of mouth
+                g.moveTo(-12 * scale, -20 * scale).lineTo(-14 * scale, -18 * scale);
+                g.moveTo(12 * scale, -20 * scale).lineTo(14 * scale, -18 * scale);
+                g.stroke({ color: 0xCC9988, width: 2 * scale });
+
+                // Rosy angry cheeks
+                g.circle(-18 * scale, -28 * scale, 5 * scale).fill({ color: red, alpha: 0.3 });
+                g.circle(18 * scale, -28 * scale, 5 * scale).fill({ color: red, alpha: 0.3 });
+
+                // Double chin
+                g.ellipse(0, -12 * scale, 15 * scale, 8 * scale).fill(skin);
             }
         }
 
@@ -1560,6 +1848,9 @@
         }
 
         function advanceNarrative() {
+            // Initialize audio on user interaction
+            initAudio();
+
             if (gameState.phase === 'name-entry') {
                 const name = playerNameInput.value.trim() || 'Player';
                 gameState.playerName = name;
@@ -1578,6 +1869,7 @@
                 gameState.totalScore = 0;
                 gameState.phase = 'intro';
                 raccoonHasAppeared = false; // Reset raccoon flag
+                hausfrauHasAppeared = false; // Reset hausfrau flag
                 showNarrative('intro');
             }
         }
@@ -1638,8 +1930,13 @@
                 tRexRabbit.active = false;
             }
 
-            // Deactivate raccoon
+            // Deactivate raccoon and hausfrau
             raccoon.active = false;
+            if (hausfrau) hausfrau.active = false;
+
+            // Reset teddy's scared state
+            teddy.isScared = false;
+            teddy.scaredTimer = 0;
 
             // Hide start raccoon during gameplay
             if (startRaccoon) startRaccoon.hide();
@@ -1653,6 +1950,19 @@
             const dx = teddy.x - sugar.x;
             const dy = teddy.y - sugar.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
+
+            // Butt wiggle when getting close in level 5+!
+            if (gameState.level >= 5 && dist < 120 && dist > 45 && !sugar.isHiding) {
+                teddy.isWigglingButt = true;
+                // Random fart sounds while wiggling!
+                const now = performance.now();
+                if (now - lastFartTime > 400 + Math.random() * 600) {
+                    playFart();
+                    lastFartTime = now;
+                }
+            } else {
+                teddy.isWigglingButt = false;
+            }
 
             if (dist < 45 && !sugar.isHiding && !sugar.isJumping) {
                 gameState.phase = 'catching';
@@ -1744,8 +2054,8 @@
                 // Update T-Rex Rabbit
                 if (tRexRabbit) tRexRabbit.update(dt);
 
-                // Update Raccoon
-                if (raccoon) raccoon.update(dt);
+                // Update Raccoon (pass Teddy's position so it vanishes before he reaches it!)
+                if (raccoon) raccoon.update(dt, teddy.x, teddy.y);
 
                 // Keep showing raccoon message while raccoon is active
                 if (raccoon && raccoon.active) {
@@ -1765,7 +2075,7 @@
                 }
 
                 // Trigger raccoon appearance (once per game, level 3+)
-                if (gameState.level >= 3 && !raccoonHasAppeared && !raccoon.active) {
+                if (gameState.level >= 3 && !raccoonHasAppeared && !raccoon.active && !teddy.isScared) {
                     // Random chance to appear (5% per frame while playing)
                     if (Math.random() < 0.0008) {
                         raccoon.appear();
@@ -1775,15 +2085,40 @@
                     }
                 }
 
-                // Status messages
-                if (sugar.isHiding) {
-                    statusEl.textContent = "Sugar is hiding!";
-                    statusEl.classList.add('show');
-                } else if (sugar.isSpooked) {
-                    statusEl.textContent = "Sugar is spooked!";
-                    statusEl.classList.add('show');
-                } else {
-                    statusEl.classList.remove('show');
+                // Update Hausfrau
+                if (hausfrau) hausfrau.update(dt);
+
+                // Clear hausfrau scared state when she disappears
+                if (hausfrau && !hausfrau.active && teddy.isScared && teddy.scaredTimer >= teddy.maxScaredTime) {
+                    teddy.isScared = false;
+                    teddy.scaredTimer = 0;
+                }
+
+                // Trigger Hausfrau appearance (once per game, level 2+)
+                if (gameState.level >= 2 && !hausfrauHasAppeared && !hausfrau.active && !teddy.isDistracted) {
+                    // Random chance to appear (higher chance so she shows up)
+                    if (Math.random() < 0.003) {
+                        hausfrau.appear();
+                        hausfrauHasAppeared = true;
+                        teddy.isScared = true;
+                        teddy.scaredTimer = 0;
+                    }
+                }
+
+                // Status messages (don't override raccoon or hausfrau messages)
+                if (!raccoon.active && !hausfrau.active) {
+                    if (sugar.isHiding) {
+                        statusEl.textContent = "Sugar is hiding!";
+                        statusEl.classList.add('show');
+                    } else if (sugar.isSpooked) {
+                        statusEl.textContent = "Sugar is spooked!";
+                        statusEl.classList.add('show');
+                    } else if (teddy.isScared) {
+                        statusEl.textContent = "Teddy is running away!";
+                        statusEl.classList.add('show');
+                    } else {
+                        statusEl.classList.remove('show');
+                    }
                 }
 
             } else if (gameState.phase === 'catching') {
@@ -1792,11 +2127,14 @@
                 teddy.update(dt);
                 sugar.update(sugar.x, sugar.y, dt);
 
-                // Update T-Rex Rabbit
+                // Update T-Rex Rabbit Daisy!
                 if (tRexRabbit) tRexRabbit.update(dt);
 
-                // Update Raccoon
-                if (raccoon) raccoon.update(dt);
+                // Update Raccoon (pass Teddy's position)
+                if (raccoon) raccoon.update(dt, teddy.x, teddy.y);
+
+                // Update Hausfrau
+                if (hausfrau) hausfrau.update(dt);
 
                 // Spawn hearts during catch
                 if (Math.random() < 0.15) {
